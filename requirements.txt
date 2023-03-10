@@ -1,8 +1,5 @@
-matplotlib==3.6.3
 numpy==1.24.2
 opencv_python==4.7.0.72
 Pillow==9.4.0
 streamlit==1.19.0
-tensorflow==2.11.0
-tensorflow_intel
 numpy==1.24.1

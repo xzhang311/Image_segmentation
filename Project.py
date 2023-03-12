@@ -1,18 +1,11 @@
 import cv2
-from PIL import Image
-import tempfile
-from pixellib.instance import instance_segmentation
-
-import time
 import numpy as np
-import streamlit as st
-
-from pixellib.tune_bg import alter_bg
+from PIL import Image
 
 
-def instance_seg(img_file, selected_classes):
-    path_to_model = r'C:\Users\soham\PycharmProjects\ML\Mask\frozen_inference_graph_coco.pb'
-    path_to_config = r'C:\Users\soham\PycharmProjects\ML\Mask\mask_rcnn_inception_v2_coco_2018_01_28.pbtxt'
+def instance_seg(img_file):
+    path_to_model = 'frozen_inference_graph_coco.pb'
+    path_to_config = 'mask_rcnn_inception_v2_coco_2018_01_28.pbtxt'
 
     model = cv2.dnn.readNetFromTensorflow(path_to_model, path_to_config)
 
@@ -21,12 +14,14 @@ def instance_seg(img_file, selected_classes):
     # Choices
     segment_class_id = []
 
-    if 'Person' in selected_classes:
-        segment_class_id.append(0)
-    if 'Motorcycle' in selected_classes:
-        segment_class_id.append(1)
-    if 'Car' in selected_classes:
-        segment_class_id.append(2)
+    if search == 'Person':
+        segment_class_id = [0]
+    elif search == 'Motorcycle':
+        segment_class_id = [1]
+    elif search == 'Car':
+        segment_class_id = [2]
+    elif search == 'All':
+        segment_class_id = []
 
     if img_file is None:
         st.write("Error: could not read image")
@@ -77,25 +72,25 @@ def instance_seg(img_file, selected_classes):
             cv2.waitKey(0)
 
 
-def semantic_seg(img, selected_classes):
+def semantic_seg(img):
     global segment_class_id
     import cv2
     import numpy as np
 
     # Load the model and configuration files
-    path_to_model = r'C:\Users\soham\PycharmProjects\ML\Mask\frozen_inference_graph_coco.pb'
-    path_to_config = r'C:\Users\soham\PycharmProjects\ML\Mask\mask_rcnn_inception_v2_coco_2018_01_28.pbtxt'
+    path_to_model = 'frozen_inference_graph_coco.pb'
+    path_to_config = 'mask_rcnn_inception_v2_coco_2018_01_28.pbtxt'
 
     model = cv2.dnn.readNetFromTensorflow(path_to_model, path_to_config)
 
     segment_class_id = []
     # Choose the class to segment
-    if 'Person' in selected_classes:
-        segment_class_id.append(0)
-    if 'Motorcycle' in selected_classes:
-        segment_class_id.append(1)
-    if 'Car' in selected_classes:
-        segment_class_id.append(2)
+    if search == 'Person':
+        segment_class_id = [0]
+    elif search == 'Motorcycle':
+        segment_class_id = [1]
+    elif search == 'Car':
+        segment_class_id = [2]
 
     # Load the input image
     img_file = img
@@ -123,7 +118,7 @@ def semantic_seg(img, selected_classes):
         score = box[2]
 
         # Filter out the objects that do not match the chosen class or have a low score
-        if score < thresh or (segment_class_id and class_id not in segment_class_id):
+        if score < thresh or class_id != segment_class_id:
             continue
 
         # Get the bounding box coordinates and extract the ROI from the black image
@@ -153,87 +148,12 @@ def semantic_seg(img, selected_classes):
     cv2.waitKey(0)
 
 
-def pixellib_segment(input_file, resize_width=640, resize_height=360):
-    # Load the segmentation model
-    segmentation_model = instance_segmentation()
-    segmentation_model.load_model(r'C:\Users\soham\PycharmProjects\ML\Mask\mask_rcnn_coco.h5')
+import time
+import numpy as np
+import streamlit as st
 
-    # Set the target classes
-    segmentation_model.select_target_classes(motorcycle=False, car=True)
-    segmentation_model.segmentThreshold = thresh_vid
-
-    # Set the threshold for minimum distance between segmented cars
-    DIST_THRESH = 50
-
-    # Initialize the list of previously detected car coordinates
-    prev_cars = []
-
-    if input_file is not None:
-        # Save the file to a temporary file on disk
-        with tempfile.NamedTemporaryFile(delete=False) as tfile:
-            tfile.write(input_file.read())
-            file_path = tfile.name
-
-        # Open the video file
-        cap = cv2.VideoCapture(file_path)
-    # Initialize the car count
-    car_count = 0
-
-    while cap.isOpened():
-        # Read a frame from the video
-        ret, frame = cap.read()
-
-        # If the frame could not be read, break out of the loop
-        if not ret:
-            break
-
-        frame = cv2.resize(frame, (resize_width, resize_height))
-        # Segment the frame to detect cars and motorcycles
-        res = segmentation_model.segmentFrame(frame)
-        rois = res[0]['rois']
-        class_ids = res[0]['class_ids']
-
-        # Iterate over the detected objects
-        for i in range(rois.shape[0]):
-            # Check if the detected object is a car or motorcycle
-            if class_ids[i] in [3, 4]:
-                # Get the coordinates of the detected object
-                y1, x1, y2, x2 = rois[i]
-                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-
-                # Check if the detected object is too close to a previously detected car
-                too_close = False
-                for px, py in prev_cars:
-                    dist = np.sqrt((px - cx) ** 2 + (py - cy) ** 2)
-                    if dist < DIST_THRESH:
-                        too_close = True
-                        break
-
-                # If the detected object is not too close to a previously detected car, count it
-                if not too_close:
-                    car_count += 1
-                    prev_cars.append((cx, cy))
-
-        # Show the frame with the segmented objects
-        # cv2.imshow('Segmentation', res[1])
-        st.image(res[1], "Segmentation")
-        st.write(f"Total number of segmented cars: {car_count}")
-
-        # # Wait for a key press to exit
-        # if cv2.waitKey(1) == ord('q'):
-        #     break
-
-    # Print the total car count
-
-    # Release the video capture and destroy all windows
-    cap.release()
-    cv2.destroyAllWindows()
-
-# Interface
 # Main
-st.set_page_config(page_title="Image Segmentation", page_icon="📷", layout="wide")
-
-# Text
+st.set_page_config(layout="wide")
 with st.container():
     st.title("Image Segmentation")
     st.write("In digital image processing and computer vision, image segmentation is the process of partitioning a "
@@ -244,8 +164,8 @@ with st.container():
              "the process of assigning a label to every pixel in an image such that pixels with the same label share "
              "certain characteristics.")
 
-    st.text("")
-
+st.text("")
+with st.container():
     st.header("Techniques of segmentation")
     st.subheader("Semantic segmentation")
     st.write("Semantic Segmentation follows three steps::")
@@ -272,109 +192,67 @@ with st.container():
              "segmentation mask for those objects i.e which pixel in the input image corresponds to which object "
              "instance road.")
 
+with st.container():
     st.text(" ")
     st.subheader("Implementation")
     st.write("From the sidebar import image and select any method,algorithm to perform segmentation on your image")
+    # from PIL import Image
+    #
+    # img = Image.open("6.png")
+    # st.image(img, caption="Original Image", width=650)
 
 # Sidebar
 
 # Model import
 with st.container():
-    fmt = st.sidebar.selectbox("Please select any format", ['Images', 'Video'])
-    if fmt == 'Images':
-        st.sidebar.header("Import image: ")
-        file = st.sidebar.file_uploader("Upload your file:", ['png', 'jpg', 'jpeg'], accept_multiple_files=False)
+    st.sidebar.header("Import image: ")
+    file = st.sidebar.file_uploader("Upload your file:", ['png', 'jpg', 'jpeg'], accept_multiple_files=False)
 
-        if st.sidebar.button("Import"):
-            with st.spinner("Importing image...."):
-                time.sleep(5)
-            st.sidebar.success("Imported successfully")
-            st.image(file)
+    if st.sidebar.button("Import"):
+        with st.spinner("Importing image...."):
+            time.sleep(5)
+        st.sidebar.success("Imported successfully")
+        st.image(file)
 
-    # Video import
-    elif fmt == 'Video':
-        st.sidebar.header("Import video: ")
-        video = st.sidebar.file_uploader("Upload your file:", ['mp4'], accept_multiple_files=False)
-        # tfile = tempfile.NamedTemporaryFile(delete=False)
-        # tfile.write(video.read())
+# Search for
 
-        if st.sidebar.button("Import video"):
-            with st.spinner("Importing video...."):
-                time.sleep(5)
-            st.sidebar.success("Imported successfully")
-            st.video(video)
+with st.container():
+    st.sidebar.header("Search for: ")
+    search = st.sidebar.selectbox("Object", ("Person", "Car", "Motorcycle", "All"))
 
-# Images
-if fmt == 'Images':
-    with st.container():
-        st.sidebar.header("Search for: ")
-        search = st.sidebar.multiselect("Object", ("Person", "Car", "Motorcycle"))
+# Segmentation technique
+with st.container():
+    st.sidebar.header("Method")
+    method = st.sidebar.selectbox("Please select any one method", ("Semantic", "Instance"))
 
-    # Segmentation technique
-    with st.container():
-        st.sidebar.header("Method")
-        method = st.sidebar.selectbox("Please select any one method", ("Semantic", "Instance"))
+# Model
 
-    # Model
+with st.container():
+    st.sidebar.header("Threshold: ")
+    thresh = st.sidebar.select_slider("Confidence Threshold", options=[0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+    algo = st.sidebar.selectbox("Algorithm", options=["Mask_RCNN"])
+    if st.sidebar.button("OK"):
+        if file is None:
+            st.sidebar.error("Please upload an image first.")
 
-    with st.container():
-        st.sidebar.header("Threshold: ")
-        thresh = st.sidebar.select_slider("Confidence Threshold", options=[0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-        algo = st.sidebar.selectbox("Algorithm", options=["Mask_RCNN"])
-        if st.sidebar.button("OK"):
-            if file is None:
-                st.sidebar.error("Please upload an image first.")
+        else:
+            with st.spinner("Performing Segmentation...."):
+                time.sleep(10)
+            st.sidebar.success("Done ! ")
 
-            else:
-                with st.spinner("Performing Segmentation...."):
-                    time.sleep(10)
-                st.sidebar.success("Done ! ")
-                if method == "Semantic" and algo == "Mask_RCNN":
+            if method == "Semantic" and algo == "Mask_RCNN":
 
-                    image = Image.open(file)
-                    semantic_seg(image, search)
+                image = Image.open(file)
 
-                elif method == "Instance" and algo == "Mask_RCNN":
+                semantic_seg(image)
 
-                    image = Image.open(file)
-                    instance_seg(image, search)
+            elif method == "Instance" and algo == "Mask_RCNN":
 
-                else:
-                    st.text("")
-
-# Video
-elif fmt == 'Video':
-    with st.container():
-        st.sidebar.header("Search : ")
-        search = st.sidebar.selectbox("Object ", ("All",))
-
-    # Segmentation technique
-    with st.container():
-        st.sidebar.header("Method")
-        method = st.sidebar.selectbox("Please select any one method", ("Instance",))
-
-    # Model
-
-    with st.container():
-        st.sidebar.header("Threshold: ")
-        thresh_vid = st.sidebar.select_slider("Confidence Threshold",
-                                              options=[0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
-        algo = st.sidebar.selectbox("Algorithm", options=["PixelLib"])
-        if st.sidebar.button("OK"):
-            if video is None:
-                st.sidebar.error("Please upload video first.")
+                image = Image.open(file)
+                instance_seg(image)
 
             else:
-                with st.spinner("Performing Segmentation...."):
-                    time.sleep(10)
-                st.sidebar.success("Done ! ")
-
-                if method == "Instance" and algo == "PixelLib":
-
-                    pixellib_segment(video)
-
-                else:
-                    st.text("")
+                st.text("")
 
 # Code
 if st.checkbox("Show / Hide Code"):
@@ -522,79 +400,4 @@ def semantic_seg(img):
     # Display the segmented image
     st.image(np.hstack([img_file, black_image]), channels="BGR", caption="Semantic Segmentation")
     cv2.waitKey(0)
-def pixellib_segment(input_file, resize_width=640, resize_height=360):
-    # Load the segmentation model
-    segmentation_model = instance_segmentation()
-    segmentation_model.load_model('mask_rcnn_coco.h5')
-
-    # Set the target classes
-    segmentation_model.select_target_classes(motorcycle=False, car=True)
-    segmentation_model.segmentThreshold = thresh_vid
-
-    # Set the threshold for minimum distance between segmented cars
-    DIST_THRESH = 50
-
-    # Initialize the list of previously detected car coordinates
-    prev_cars = []
-
-    if input_file is not None:
-        # Save the file to a temporary file on disk
-        with tempfile.NamedTemporaryFile(delete=False) as tfile:
-            tfile.write(input_file.read())
-            file_path = tfile.name
-
-        # Open the video file
-        cap = cv2.VideoCapture(file_path)
-    # Initialize the car count
-    car_count = 0
-
-    while cap.isOpened():
-        # Read a frame from the video
-        ret, frame = cap.read()
-
-        # If the frame could not be read, break out of the loop
-        if not ret:
-            break
-
-        frame = cv2.resize(frame, (resize_width, resize_height))
-        # Segment the frame to detect cars and motorcycles
-        res = segmentation_model.segmentFrame(frame)
-        rois = res[0]['rois']
-        class_ids = res[0]['class_ids']
-
-        # Iterate over the detected objects
-        for i in range(rois.shape[0]):
-            # Check if the detected object is a car or motorcycle
-            if class_ids[i] in [3, 4]:
-                # Get the coordinates of the detected object
-                y1, x1, y2, x2 = rois[i]
-                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-
-                # Check if the detected object is too close to a previously detected car
-                too_close = False
-                for px, py in prev_cars:
-                    dist = np.sqrt((px - cx) ** 2 + (py - cy) ** 2)
-                    if dist < DIST_THRESH:
-                        too_close = True
-                        break
-
-                # If the detected object is not too close to a previously detected car, count it
-                if not too_close:
-                    car_count += 1
-                    prev_cars.append((cx, cy))
-
-        # Show the frame with the segmented objects
-        # cv2.imshow('Segmentation', res[1])
-        st.image(res[1], "Segmentation")
-        st.write(f"Total number of segmented cars: {car_count}")
-
-        # # Wait for a key press to exit
-        # if cv2.waitKey(1) == ord('q'):
-        #     break
-
-    # Print the total car count
-
-    # Release the video capture and destroy all windows
-    cap.release()
-    cv2.destroyAllWindows()
         ''')
